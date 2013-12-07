@@ -324,12 +324,7 @@ BigNum *add(BigNum *a, BigNum *b, int isReturn, int *error) {
 
   deleteZeros(result);
 
-  if (!isReturn) {
-    moveBigNum(a,result);
-  }
-
-
-  return (isReturn) ? result : NULL;
+  return (isReturn) ? result : (moveBigNum(a,result),NULL);
 }
 
 BigNum *dif(BigNum *a, BigNum *b, int isReturn, int *error) {
@@ -437,7 +432,7 @@ BigNum *divd_mod(BigNum *_a, BigNum *_b, int isReturn, int divdReturn, int *erro
 
   if (asig != bsig) unDif(_b,0,error);
 
-  for (; AMOREB == compare_abs(a,_b); len--) {
+  for (; BMOREA != compare_abs(a,_b); len--) {
     moveBigNum(ten,tenInDeg(len,error));
     ERROR;
     mul(ten,_b,0,error);
@@ -484,7 +479,7 @@ BigNum *mod(BigNum *_a, BigNum *_b, int isReturn, int *error) {
   return divd_mod(_a,_b,isReturn,0,error);
 }
 
-BigNum deg(BigNum a, BigNum b, int isReturn, int *error) {
+BigNum *deg(BigNum *a, BigNum *b, int isReturn, int *error) {
   BigNum *res = NULL, *degree = NULL, *two = NULL, *one = NULL, *nul = NULL;
   *error = 0;
 
@@ -494,9 +489,17 @@ BigNum deg(BigNum a, BigNum b, int isReturn, int *error) {
   one = stringToBigNum("1",error);  ERROR;
   nul = newBigNum(error);  ERROR;
 
-  if (AEQB == compare_abs(b,one)) {
+
+  switch(compare(b,nul)) {
+  case AEQB:
     CLEAN;
-    return res;
+    return (isReturn) ? res : (moveBigNum(a,res),NULL);
+    break;
+  case BMOREA:
+    null(res,error); ERROR;
+    CLEAN;
+    return (isReturn) ? res : (moveBigNum(a,res),NULL);
+    break;
   }
 
   deleteBigNum(res);
@@ -507,14 +510,14 @@ BigNum deg(BigNum a, BigNum b, int isReturn, int *error) {
     mul(degree,two,0,error);  ERROR;
   }
 
-  divd(res,two,0,error);  ERROR;
+  divd(degree,two,0,error);  ERROR;
   
-  while (BMORE == compare_abs(degree,b)) {
+  while (BMOREA == compare_abs(degree,b)) {
     mul(res,a,0,error); ERROR;
     add(degree,one,0,error);
   }
-  
-  
+
+  return (isReturn) ? res : (moveBigNum(a,res),NULL);
 }
 
 BigNum *unDif(BigNum *a, int isReturn, int *error) {
@@ -606,6 +609,7 @@ void BigNum_tests() {
   };
   char testDivd[][3][1000] = {
     {"10","2","5"},
+    {"2","2","1"},
     {"100","3","33"},
     {"9174","83","110"},
     {"-9174","83","-111"},
@@ -631,6 +635,18 @@ void BigNum_tests() {
     {"0","10","0"},
     {"1298473924639124679141394679814798353831216508312469124638912461372483164712481249324981249834781259382678412464831649783124697826578569847031264971324698125467381256918256798461324697815197258647812647981246731467981246837125637981567139849812469817491432469185637214689312469478","173267781","93086883"},
     {"01298473924639124679141394679814798353831216508312469124638912461372483164712481249324981249834781259382678412464831649783124697826578569847031264971324698125467381256918256798461324697815197258647812647981246731467981246837125637981567139849812469817491432469185637214689312469478","1","0"},
+    {"\5","",""},
+    {"","",""}
+  };
+  char testDeg[][3][10000] = {
+    {"1","1000000","1"},
+    {"0","1023817","0"},
+    {"1","-3213","0"},
+    {"2","-4","0"},
+    {"241","1","241"},
+    {"241321566","0","1"},
+    {"0","0","1"},
+    {"12","100","828179745220145502584084235957368498016122811853894435464201864103254919330121223037770283296858019385573376"},
     {"\5","",""},
     {"","",""}
   };
@@ -894,6 +910,36 @@ void BigNum_tests() {
         printf("E\n");
       }
 
+    }
+
+    fprintf(f,"<h2>#%d. Degree test</h2>\n",count1++);
+    {
+      for (i = 0; '\5' != testDeg[i][0][0]; i++) {
+        fprintf(f,"<b>#%d.0.%d</b>:&nbsp;",count1,i);
+        printf("%d.%d S",count1,i);
+        a = stringToBigNum(testDeg[i][0],&error);
+        sig = a->sig;
+        b = stringToBigNum(testDeg[i][1],&error);
+        c = deg(a,b,1,&error);
+        sout = BigNumToString(c,&error);
+        result = ((!strcmp(testDeg[i][2],sout)) && (sig == a->sig));
+        fprintf(f,"%s ",resultHtml[result]);
+        if (!result) fprintf(f,"Return mode: \"%s\" ^ \"%s\" = <br>\"%s\", Right:<br>\"%s\", signum of a: %d -> %d<br>",testDeg[i][0],testDeg[i][1],sout,testDeg[i][2],sig,a->sig);
+        free(sout);
+
+        deg(a,b,0,&error);
+        sout = BigNumToString(a,&error);
+        result = (!strcmp(testDeg[i][2],sout)) ;
+        fprintf(f,"%s<br>\n",resultHtml[result]);
+        if (!result) fprintf(f,"Stack mode: \"%s\" ^ \"%s\" = \"%s\", Right:\n\"%s\", signum of a: %d -> %d<br>",testDeg[i][0],testDeg[i][1],sout,testDeg[i][2],sig,a->sig);
+
+        deleteBigNum(a);
+        deleteBigNum(b);
+        deleteBigNum(c);
+        free(sout);
+        fflush(f);
+        printf("E\n");
+      }
     }
 
   }

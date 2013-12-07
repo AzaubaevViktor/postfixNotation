@@ -34,7 +34,7 @@ BigNum *dif(BigNum *a, BigNum *b, int isReturn, int *error);
 BigNum *mul(BigNum *a, BigNum *b, int isReturn, int *error);
 BigNum *divd(BigNum *_a, BigNum *_b, int isReturn, int *error);
 BigNum *mod(BigNum *_a, BigNum *_b, int isReturn, int *error);
-BigNum deg(BigNum a, BigNum b, int isReturn, int *error);
+BigNum *deg(BigNum *a, BigNum *b, int isReturn, int *error);
 BigNum *unDif(BigNum *a, int isReturn, int *error);
 
 #ifdef TESTS
