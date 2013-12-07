@@ -9,7 +9,7 @@
 #define AMOREB (-1)
 #define BMOREA (1)
 #define AEQB (0)
-#define TESTS
+#define BIGNUM_TESTS
 
 /* sig -- -1 -- negative, 1 -- positive
  * len -- number of cell in the digits
@@ -37,7 +37,7 @@ BigNum *mod(BigNum *_a, BigNum *_b, int isReturn, int *error);
 BigNum *deg(BigNum *a, BigNum *b, int isReturn, int *error);
 BigNum *unDif(BigNum *a, int isReturn, int *error);
 
-#ifdef TESTS
+#ifdef BIGNUM_TESTS
 #include <stdio.h>
 #include <string.h>
 void BigNum_tests();

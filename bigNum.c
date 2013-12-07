@@ -1,14 +1,17 @@
 #include "bigNum.h"
+#include <string.h>
 #define ERROR if (*error) return NULL
 #define CLEAN ;
 
-static char getDigit(BigNum *num, size_t digit) {
-  return (num->len > digit) ? num->digits[digit] : 0;
-}
+#define INIT_WATCH(N) void *__watch[(N)]; size_t __index = 0; memset(__watch, 0, sizeof(__watch));
+#define ADD_WATCH(ptr) (__watch[++__index] = (ptr));
+#define CLEAN_WATCH while(__index != 0) free(__watch[__index--]);
+#define TEST_WATCH(ptr) if (!ptr) {CLEAN_WATCH; return NULL;}
+#define ERROR_WATCH if (*error) {CLEAN_WATCH; return NULL;}
 
-static int checkNum(int num) {
-  return (num >= 0) && (num <= 9);
-}
+#define getDigit(num,digit) (((num)->len > (digit)) ? (num)->digits[(digit)] : 0)
+
+#define checkNum(num) (((num) >= 0) && ((num) <= 9))
 
 static size_t getMaxLen(BigNum *a, BigNum *b) {
   return (a->len > b->len) ? (a->len) : (b->len);
@@ -36,19 +39,9 @@ static void setBigNumLen(BigNum *num, size_t newLen, int *error) {
   num->len = newLen;
 }
 
-static int getSig(signed char num) {
-  return (num > 0) ? 1 : -1;
-}
+#define modchar(a,b) (((a) % (b) < 0) ? (a) % (b) + b : (a) % (b))
 
-static signed char modchar(signed char a, signed char b) {
-  signed char res = a % b;
-  return (res < 0) ? (b+res) : res;
-}
-
-static signed char divchar(signed char a, signed char b) {
-  signed char res = a / b;
-  return (res*b > a) ? res-1 : res;
-}
+#define divchar(a,b) (((((a) / (b))*(b)) > (a)) ? ((a) / (b) - 1) : ((a) / (b)))
 
 static void deleteZeros(BigNum *num) {
   size_t len = 0;
@@ -66,35 +59,38 @@ static void moveBigNum(BigNum *to, BigNum *from) {
   to->sig = from->sig;
   free(to->digits);
   to->digits = from->digits;
-  from->digits = 0;
+  from->digits = NULL;
   deleteBigNum(from);
 }
 
 static BigNum *copyBigNum(BigNum *from, int *error) {
-  BigNum *to = 0;
-  size_t i = 0;
+  BigNum *to = NULL;
+  INIT_WATCH(1);
 
   to = newBigNum(error);
-  ERROR;
+  ERROR_WATCH;
+  ADD_WATCH(to);
 
   setBigNumLen(to,from->len,error);
-  ERROR;
+  ERROR_WATCH;
 
   to->sig = from->sig;
 
-  for (i = 0; i < from->len; i++) {
-    to->digits[i] = from->digits[i];
-  }
+  memcpy(to->digits,from->digits,from->len);
 
   return to;
 }
 
 static BigNum *tenInDeg(size_t deg, int *error) {
-  BigNum *num = newBigNum(error);
-  ERROR;;
+  BigNum *num = NULL;
+  INIT_WATCH(1);
+
+  num = newBigNum(error);
+  ERROR_WATCH;
+  ADD_WATCH(num);
 
   setBigNumLen(num,deg+1,error);
-  ERROR;;
+  ERROR_WATCH;
 
   num->digits[deg] = 1;
 
@@ -163,44 +159,6 @@ int compare_abs(BigNum *a, BigNum *b) {
     if (getDigit(a,maxlen-i-1) < getDigit(b,maxlen-i-1)) return 1;
   }
   return 0;
-}
-
-/* maybe fail */
-void normalize(BigNum *num, int *error) {
-  size_t len = 0, newLen = 0;
-  size_t i = 0;
-  int sig = 1;
-  *error = 0;
-
-  if (!num) {
-    *error = NOT_BIG_NUM;
-    return; }
-
-  len = num->len;
-  newLen = len;
-
-  setBigNumLen(num,len+2,error);
-  if (error) return;
-
-  for (i = 0; i <= len; i++) {
-    num->digits[i+1] = divchar(num->digits[i],10);
-    num->digits[i] = modchar(num->digits[i],10);
-  }
-
-  while ((0 < newLen) && (0 == num->digits[newLen])) newLen--;
-  sig = getSig(num->digits[newLen])*(num->sig);
-
-  num->sig = sig;
-  num->digits[newLen] = abs(num->digits[newLen]);
-
-  if (-1 == sig)
-    for (i = len-1; i >= 1; i--) {
-      if (num->digits[i+1] != 0) {
-        num->digits[i] -= 1;
-        num->digits[i+1] = 10 - num->digits[i+1];
-      }
-    }
-
 }
 
 BigNum *stringToBigNum(char *s, int *error) {
@@ -492,12 +450,10 @@ BigNum *deg(BigNum *a, BigNum *b, int isReturn, int *error) {
 
   switch(compare(b,nul)) {
   case AEQB:
-    CLEAN;
     return (isReturn) ? res : (moveBigNum(a,res),NULL);
     break;
   case BMOREA:
     null(res,error); ERROR;
-    CLEAN;
     return (isReturn) ? res : (moveBigNum(a,res),NULL);
     break;
   }
@@ -540,10 +496,12 @@ BigNum *unDif(BigNum *a, int isReturn, int *error) {
 
 /* ========================= TESTS ======================== */
 
+#ifdef BIGNUM_TESTS
+
 void BigNum_tests() {
   char resultHtml[2][100] = {"<font style='color:red'>FAIL</font>","<font style='color:green'>OK</font>"};
   char *sin,*sout = 0;
-  char testsModChar[][4] = { {125,24,5,5}, {10,3,1,3}, {-10,3,2,-4}, {-100,66,32,-2}, {-127,-127,-127,-127} };
+  char testsModChar[][4] = { {125,24,5,5}, {10,3,1,3}, {-10,3,2,-4}, {-100,66,32,-2}, {-100,-13,-9,7}, {-127,-127,-127,-127} };
   char testInterconversion[][2][1000] = {
     {"84371321499123965911030412040148392","84371321499123965911030412040148392"},
     {"000000084371321499123965911030412040148392","84371321499123965911030412040148392"},
@@ -947,3 +905,5 @@ void BigNum_tests() {
   fprintf(f,"<hr> Test ended!</body></html>");
   fclose(f);
 }
+
+#endif
