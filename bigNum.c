@@ -3,12 +3,6 @@
 #define ERROR if (*error) return NULL
 #define CLEAN ;
 
-#define INIT_WATCH(N) void *__watch[(N)]; size_t __index = 0; memset(__watch, 0, sizeof(__watch));
-#define ADD_WATCH(ptr) (__watch[++__index] = (ptr));
-#define CLEAN_WATCH while(__index != 0) free(__watch[__index--]);
-#define TEST_WATCH(ptr) if (!ptr) {CLEAN_WATCH; return NULL;}
-#define ERROR_WATCH if (*error) {CLEAN_WATCH; return NULL;}
-
 #define getDigit(num,digit) (((num)->len > (digit)) ? (num)->digits[(digit)] : 0)
 
 #define checkNum(num) (((num) >= 0) && ((num) <= 9))
@@ -65,14 +59,13 @@ static void moveBigNum(BigNum *to, BigNum *from) {
 
 static BigNum *copyBigNum(BigNum *from, int *error) {
   BigNum *to = NULL;
-  INIT_WATCH(1);
+  *error = 0;
 
   to = newBigNum(error);
-  ERROR_WATCH;
-  ADD_WATCH(to);
+  ERROR;
 
   setBigNumLen(to,from->len,error);
-  ERROR_WATCH;
+  ERROR;
 
   to->sig = from->sig;
 
@@ -83,14 +76,13 @@ static BigNum *copyBigNum(BigNum *from, int *error) {
 
 static BigNum *tenInDeg(size_t deg, int *error) {
   BigNum *num = NULL;
-  INIT_WATCH(1);
+  *error = 0;
 
   num = newBigNum(error);
-  ERROR_WATCH;
-  ADD_WATCH(num);
+  ERROR;
 
   setBigNumLen(num,deg+1,error);
-  ERROR_WATCH;
+  ERROR;
 
   num->digits[deg] = 1;
 
