@@ -3,11 +3,69 @@
 #define ERROR if (*error) return NULL
 #define CLEAN ;
 
-#define INIT_WATCH(N) void *__watch[(N)]; size_t __index = 0; memset(__watch, 0, sizeof(__watch));
-#define ADD_WATCH(ptr) (__watch[++__index] = (ptr));
-#define CLEAN_WATCH while(__index != 0) free(__watch[__index--]);
-#define TEST_WATCH(ptr) if (!ptr) {CLEAN_WATCH; return NULL;}
-#define ERROR_WATCH if (*error) {CLEAN_WATCH; return NULL;}
+/*
+ * INIT_WATCH(N) -- инициализация слежки. N -- кол-во динамических переменных, которые могут дать ошибку
+ * ADD_WATCH(ptr) -- добавить в слежку переменную.
+ * CLEAN_WATCH -- очистить переменные.
+ * ERROR_WATCH -- если в переменной *error не ноль, то чистит все переменные и выходит
+ * SET_ERROR_TEST_WATCH(cond,err) -- если в условии cond ноль -- в *error кладётся значение err, чистятся переменные и выходит из программы
+ * DELETE_FROM_WATCH(ptr) -- удалить переменную из наблюдения
+ */
+
+#define INIT_WATCH(__N) \
+  void *__watch[(__N+1)]; \
+  size_t __old_index = 0; \
+  size_t __index = 0; \
+  *error = 0; \
+  memset(__watch, 0, sizeof(__watch));
+
+#define ADD_WATCH(__ptr) \
+  __watch[++__index] = (__ptr);
+
+#define ADD_WATCH_BIG_NUM(__num) \
+  ADD_WATCH(__num); \
+  ADD_WATCH(__num->digits);
+
+#define CLEAN_WATCH \
+  while(__index != 0) \
+    free(__watch[__index--]);
+
+#define ERROR_WATCH \
+  if (*error) {\
+    CLEAN_WATCH;\
+    return NULL;\
+  }
+
+#define SET_ERROR_TEST_WATCH(__cond,__err) \
+  if (!__cond) { \
+    CLEAN_WATCH; \
+    *error = (__err); \
+    return NULL; \
+  }
+
+
+#define DELETE_FROM_WATCH(__ptr) \
+  __old_index = __index; \
+  while ((__index != 0) && ((__ptr) != __watch[__index])) \
+    __index--; \
+  if (__index != 0) __watch[__index] = NULL; \
+  __index = __old_index;
+
+#define DELETE_FROM_WATCH_BIG_NUM(__num) \
+  DELETE_FROM_WATCH(__num); \
+  DELETE_FROM_WATCH(__num->digits);
+
+#define SET_BIG_NUM_LEN_WATCH(__num,__len) \
+  DELETE_FROM_WATCH((__num)->digits); \
+  setBigNumLen((__num),(__len), error); \
+  ERROR_WATCH; \
+  ADD_WATCH((__num)->digits);
+
+#define DELETE_ZEROS_WATCH(__num) \
+  DELETE_FROM_WATCH((__num)->digits); \
+  deleteZeros((__num), error); \
+  ERROR_WATCH; \
+  ADD_WATCH((__num)->digits);
 
 #define getDigit(num,digit) (((num)->len > (digit)) ? (num)->digits[(digit)] : 0)
 
@@ -41,17 +99,17 @@ static void setBigNumLen(BigNum *num, size_t newLen, int *error) {
 
 #define modchar(a,b) (((a) % (b) < 0) ? (a) % (b) + b : (a) % (b))
 
-#define divchar(a,b) (((((a) / (b))*(b)) > (a)) ? ((a) / (b) - 1) : ((a) / (b)))
+#define divchar(a,b) ((a) / (b) - (((a) / (b))*(b) > (a)))
 
-static void deleteZeros(BigNum *num) {
+static void deleteZeros(BigNum *num, int *error) {
   size_t len = 0;
-  int error = 0;
+  *error = 0;
 
   for (len = num->len; (len>1) && (0 == num->digits[len-1]); len--);
 
   if ((0 == num->digits[0]) && (1 >= len)) num->sig = 1;
 
-  setBigNumLen(num,len,&error);
+  setBigNumLen(num,len,error);
 }
 
 static void moveBigNum(BigNum *to, BigNum *from) {
@@ -65,57 +123,58 @@ static void moveBigNum(BigNum *to, BigNum *from) {
 
 static BigNum *copyBigNum(BigNum *from, int *error) {
   BigNum *to = NULL;
-  INIT_WATCH(1);
+  INIT_WATCH(1*2);
 
   to = newBigNum(error);
   ERROR_WATCH;
-  ADD_WATCH(to);
+  ADD_WATCH_BIG_NUM(to);
 
-  setBigNumLen(to,from->len,error);
-  ERROR_WATCH;
+  SET_BIG_NUM_LEN_WATCH(to,from->len);
 
   to->sig = from->sig;
 
   memcpy(to->digits,from->digits,from->len);
 
+  DELETE_FROM_WATCH_BIG_NUM(to);
+  CLEAN_WATCH;
   return to;
 }
 
 static BigNum *tenInDeg(size_t deg, int *error) {
   BigNum *num = NULL;
-  INIT_WATCH(1);
+  INIT_WATCH(1*2);
 
   num = newBigNum(error);
   ERROR_WATCH;
-  ADD_WATCH(num);
+  ADD_WATCH_BIG_NUM(num);
 
-  setBigNumLen(num,deg+1,error);
-  ERROR_WATCH;
+  SET_BIG_NUM_LEN_WATCH(num,deg+1);
 
   num->digits[deg] = 1;
 
+  DELETE_FROM_WATCH_BIG_NUM(num);
+  CLEAN_WATCH;
   return num;
 }
 
 BigNum *newBigNum(int *error) {
-  BigNum *num = calloc(1,sizeof(BigNum));
-  *error = 0;
+  BigNum *num = NULL;
+  INIT_WATCH(1*2);
 
-  if (!num) {
-    *error = MEMORY_ALLOCATE_ERROR;
-    return NULL;
-  }
+  num = calloc(1,sizeof(BigNum));
+  SET_ERROR_TEST_WATCH(num,MEMORY_ALLOCATE_ERROR);
+  ADD_WATCH(num);
 
   num->digits = calloc(1,sizeof(char));
-  if (!num->digits) {
-    *error = MEMORY_ALLOCATE_ERROR;
-    free(num);
-    num = NULL;
-  }
+  SET_ERROR_TEST_WATCH(num->digits, MEMORY_ALLOCATE_ERROR);
+  ADD_WATCH(num->digits);
 
   num->len = 1;
   num->sig = 1;
 
+  DELETE_FROM_WATCH(num);
+  DELETE_FROM_WATCH(num->digits);
+  CLEAN_WATCH;
   return num;
 }
 
@@ -129,6 +188,7 @@ void deleteBigNum(BigNum *num) {
 void null(BigNum *num, int *error) {
   size_t i = 0;
   *error = 0;
+
   if (!num) {
     *error = NOT_BIG_NUM;
     return;
@@ -140,7 +200,7 @@ void null(BigNum *num, int *error) {
     num->digits[i] = 0;
   }
 
-  deleteZeros(num);
+  deleteZeros(num,error);
 }
 
 int compare(BigNum *a, BigNum *b) {
@@ -166,51 +226,42 @@ BigNum *stringToBigNum(char *s, int *error) {
   char *ch = NULL;
   size_t len = 0, i = 0;
   BigNum *num = NULL;
-  *error = 0;
+  INIT_WATCH(1*2);
 
   for (ch = s; *ch; (len++, ch++));
 
   num = newBigNum(error);
-  ERROR;
+  ERROR_WATCH;
+  ADD_WATCH_BIG_NUM(num);
 
   num->sig = ((len>0) && ('-' == *_s)) ? (_s++,len--,-1) : 1;
 
   for (; '0' == *_s; (_s++,len--));
 
-  setBigNumLen(num,(0 == len) ? 1 : len,error);
-  ERROR;
+  SET_BIG_NUM_LEN_WATCH(num,(0 == len) ? 1 : len);
 
   for (i = 0; i < len; i++) {
-    if (!checkNum(_s[i] - '0')) {
-      *error = PARSE_STRING_ERROR;
-      deleteBigNum(num);
-      return NULL;
-    }
+    SET_ERROR_TEST_WATCH(checkNum(_s[i] - '0'),PARSE_STRING_ERROR)
     num->digits[i] = _s[len - i - 1] - '0';
   }
 
   if ((0 == num->digits[0]) && (1 >= num->len)) num->sig = 1;
 
+  DELETE_FROM_WATCH_BIG_NUM(num);
+  CLEAN_WATCH;
   return num;
 }
 
 char *BigNumToString(BigNum *num, int *error) {
   char *s = NULL, *_s = NULL;
   size_t i = 0;
-  *error = 0;
+  INIT_WATCH(1);
 
-  if (!num) {
-    *error = NOT_BIG_NUM;
-    return NULL;
-  }
+  SET_ERROR_TEST_WATCH(num,NOT_BIG_NUM);
 
   _s = s = calloc((num->len) + (-1 == num->sig) + 1, sizeof(char));
-  if (!s) {
-    *error = MEMORY_ALLOCATE_ERROR;
-    return NULL;
-  }
-
-//  deleteZeros(num);
+  SET_ERROR_TEST_WATCH(s,MEMORY_ALLOCATE_ERROR);
+  ADD_WATCH(_s);
 
   if (-1 == num->sig) {
     *s = '-';
@@ -223,6 +274,8 @@ char *BigNumToString(BigNum *num, int *error) {
 
   s[i] = '\0';
 
+  DELETE_FROM_WATCH(_s);
+  CLEAN_WATCH;
   return _s;
 }
 
@@ -234,14 +287,12 @@ BigNum *add(BigNum *a, BigNum *b, int isReturn, int *error) {
   size_t maxLen = 0;
   size_t i = 0;
   signed char res = 0, carry = 0;
-  *error = 0;
+  INIT_WATCH(1*2);
 
-  if (!(a && b)) {
-    *error = NOT_BIG_NUM;
-    return NULL;
-  }
+  SET_ERROR_TEST_WATCH((a && b),NOT_BIG_NUM);
   result = newBigNum(error);
-  ERROR;
+  ERROR_WATCH;
+  ADD_WATCH_BIG_NUM(result);
 
   siga = a->sig;
   sigb = b->sig;
@@ -263,8 +314,8 @@ BigNum *add(BigNum *a, BigNum *b, int isReturn, int *error) {
 
   maxLen = getMaxLen(minNum,maxNum);
 
-  setBigNumLen(result,maxLen,error);
-  ERROR;
+  SET_BIG_NUM_LEN_WATCH(result,maxLen);
+
   for (i = 0; i < maxLen; i++) {
     res = getDigit(a,i)*(a->sig) + getDigit(b,i)*(b->sig) + carry;
     carry = divchar(res,10);
@@ -276,22 +327,23 @@ BigNum *add(BigNum *a, BigNum *b, int isReturn, int *error) {
 
 
   if (carry) {
-    setBigNumLen(result,maxLen+1,error);
+    SET_BIG_NUM_LEN_WATCH(result,maxLen+1);
     result->digits[maxLen] = carry;
   }
 
-  deleteZeros(result);
+  DELETE_ZEROS_WATCH(result);
 
+  DELETE_FROM_WATCH_BIG_NUM(result);
+  CLEAN_WATCH;
   return (isReturn) ? result : (moveBigNum(a,result),NULL);
 }
 
 BigNum *dif(BigNum *a, BigNum *b, int isReturn, int *error) {
   signed char sigb = 0;
   BigNum *result = NULL;
-  if (!b) {
-    *error = NOT_BIG_NUM;
-    return NULL;
-  }
+  INIT_WATCH(0);
+
+  SET_ERROR_TEST_WATCH((a && b),NOT_BIG_NUM);
 
   sigb = b->sig;
   b->sig = -b->sig;
@@ -304,64 +356,54 @@ BigNum *mul(BigNum *a, BigNum *b, int isReturn, int *error) {
   BigNum *result = NULL;
   size_t ai = 0, bi = 0, ri = 0, len = 0;
   signed char res = 0, carry = 0;
-  *error = 0;
+  INIT_WATCH(1*2);
 
-  if ((!a) && (!b))
-  {
-    *error = NOT_BIG_NUM;
-    return NULL;
-  }
+  SET_ERROR_TEST_WATCH((a && b), NOT_BIG_NUM);
 
   result = newBigNum(error);
-  if ((*error) || (!result)) return NULL;
+  ERROR_WATCH;
+  ADD_WATCH_BIG_NUM(result);
 
   len = a->len + b->len + 10;
-  setBigNumLen(result,len,error);
+
+  SET_BIG_NUM_LEN_WATCH(result,len);
+
   result->sig = (a->sig) * (b->sig);
-  ERROR;
 
   for (ai = 0; ai < a->len; ai++) {
     for (bi = 0; bi < b->len; bi++) {
       ri = ai+bi;
       res = (a->digits[ai]) * (b->digits[bi]) + result->digits[ri];
-      carry = divchar(res,10);
-      result->digits[ri] = modchar(res,10);
+      carry = res / 10;
+      result->digits[ri] = res % 10;
       for (ri++; 0 != carry; ri++) {
         res = result->digits[ri] + carry;
-        carry = divchar(res,10);
-        result->digits[ri] = modchar(res,10);
+        carry = res / 10;
+        result->digits[ri] = res % 10;
       }
     }
   }
 
-  deleteZeros(result);
+  DELETE_ZEROS_WATCH(result);
 
-  if (!isReturn) {
-    moveBigNum(a,result);
-  } else {
-  return result;
-  }
-
-  return NULL;
+  DELETE_FROM_WATCH_BIG_NUM(result);
+  CLEAN_WATCH;
+  return (isReturn) ? result : (moveBigNum(a,result), NULL);
 }
 
 BigNum *divd_mod(BigNum *_a, BigNum *_b, int isReturn, int divdReturn, int *error) {
-  /* a = res * b + mod
-   * В необработке ошибок таятся утечки памяти -- нужно  перед выходом чистить все переменные! */
-  //TODO: правильная, нетекучая обработка ошибок
-  BigNum *res = NULL, *ten = NULL, *a = NULL, *null = NULL;
+  /* a = res * b + mod */
+  BigNum *res = NULL, *ten = NULL, *a = NULL, *nul = NULL;
   size_t alen = 0, blen = 0, len = 0, asig = 0, bsig = 0;
-  *error = 0;
+  INIT_WATCH(5*2);
 
-  if ((!_a) && (!_b)) {
-    *error = NOT_BIG_NUM;
-    return NULL;
-  }
+  SET_ERROR_TEST_WATCH((_a && _b),NOT_BIG_NUM);
 
   if (BMOREA == compare_abs(_a,_b)) {
     res = newBigNum(error);
-    ERROR;
+    ERROR_WATCH;
     res->sig = _a->sig * _b->sig;
+    CLEAN_WATCH;
     return res;
   }
 
@@ -369,32 +411,33 @@ BigNum *divd_mod(BigNum *_a, BigNum *_b, int isReturn, int divdReturn, int *erro
   bsig = _b->sig;
 
   res = newBigNum(error);
-  ERROR;
+  ERROR_WATCH;
+  ADD_WATCH_BIG_NUM(res);
   ten = newBigNum(error);
-  ERROR;
-  null = newBigNum(error);
-  ERROR;
+  ERROR_WATCH;
+  ADD_WATCH_BIG_NUM(ten);
+  nul = newBigNum(error);
+  ERROR_WATCH;
+  ADD_WATCH_BIG_NUM(nul);
 
-  if (AEQB == compare_abs(_b,null)) {
-    *error = DIVISION_BY_ZERO;
-    return NULL;
-  }
+  SET_ERROR_TEST_WATCH(AEQB != compare_abs(_b,nul),DIVISION_BY_ZERO);
 
   a = copyBigNum(_a,error);
-  ERROR;
+  ERROR_WATCH;
+  ADD_WATCH_BIG_NUM(a);
   blen = _b->len;
   alen = a->len;
   len = alen-blen;
   if (divdReturn) setBigNumLen(res, len + 1, error);
-  ERROR;
+  ERROR_WATCH;
 
   if (asig != bsig) unDif(_b,0,error);
 
   for (; BMOREA != compare_abs(a,_b); len--) {
     moveBigNum(ten,tenInDeg(len,error));
-    ERROR;
+    ERROR_WATCH;
     mul(ten,_b,0,error);
-    ERROR;
+    ERROR_WATCH;
     while (BMOREA != compare_abs(a,ten)) {
       dif(a,ten,0,error);
       if (divdReturn) res->digits[len] += 1;
@@ -405,27 +448,27 @@ BigNum *divd_mod(BigNum *_a, BigNum *_b, int isReturn, int divdReturn, int *erro
   _b->sig = bsig;
 
   if (!divdReturn) {
+    DELETE_FROM_WATCH_BIG_NUM(res);
+    deleteBigNum(res);
     res = copyBigNum(a,error);
-    ERROR;
+    ERROR_WATCH;
+    ADD_WATCH_BIG_NUM(res);
   }
 
   if (asig != bsig) {
     if (divdReturn) {
       moveBigNum(ten,stringToBigNum("1",error));
       add(res,ten,0,error);
-      ERROR;
+      ERROR_WATCH;
       res->sig = -1;
     } else {
       add(res,_b,0,error);
-      ERROR;
+      ERROR_WATCH;
     }
   }
 
-  deleteBigNum(ten);
-  deleteBigNum(a);
-
-  deleteZeros(res);
-
+  DELETE_FROM_WATCH_BIG_NUM(res);
+  CLEAN;
   return (isReturn) ? res : (moveBigNum(_a,res),NULL);
 }
 
@@ -481,13 +524,13 @@ BigNum *unDif(BigNum *a, int isReturn, int *error) {
   switch (isReturn) {
   case 0:
     a->sig = - a->sig;
-    deleteZeros(a);
+    deleteZeros(a,error);
     return 0;
     break;
   case 1:
     result = copyBigNum(a,error);
     result->sig = - a->sig;
-    deleteZeros(result);
+    deleteZeros(result,error);
     return result;
   }
   return 0;
