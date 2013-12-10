@@ -27,6 +27,7 @@ void null(BigNum *num, int *error);
 int compare(BigNum *a, BigNum *b);
 int compare_abs(BigNum *a, BigNum *b);
 void normalize(BigNum *num, int *error);
+BigNum *intToBigNum(int64_t in, int *error);
 BigNum *stringToBigNum(char *s, int *error);
 char *BigNumToString(BigNum *num, int *error);
 BigNum *add(BigNum *a, BigNum *b, int isReturn, int *error);

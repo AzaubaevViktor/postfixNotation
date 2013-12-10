@@ -1,87 +1,116 @@
 #include "notations.h"
-#include "bigNum.h"
-#include <stdlib.h>
 
+#define elif else if
 
-typedef struct _Operand {
-  int type;
-  union {
-    int64_t num;
-    int func;
-  } data;
-} Operand;
+static int _operations[256] = {0,0};
+static int _types[256] = {0,0};
 
-typedef struct _OpList {
-  Operand operand;
-  struct _OpList *next;
-} OpList;
+int getOperate(int ch) {
+  if (!_operations[1]) {
+    memset(_operations,0,256);
+    _operations['('] = BRACK_OP;
+    _operations[')'] = BRACK_CL;
+    _operations['+'] = ADD;
+    _operations['-'] = DIF;
+    _operations['*'] = MUL;
+    _operations['/'] = DIV;
+    _operations['^'] = DEG;
+    _operations[1] = 0;
+  }
 
-#define NONE 0
-#define NUM 1
-#define FUNC 2
-#define VAR 3
-
-#define BRACK_OP 0
-#define BRACK_CL 1
-#define ADD 2
-#define DIF 3
-#define MUL 4
-#define DIV 5
-#define DEG 6
-#define UNADD 7
-#define UNDIF 8
-
-/*
-static OpList *initList() {
-  return calloc(sizeof(OpList),1);
+  return _operations[ch];
 }
 
-OpList *stringToPrefix(const char *constpStr) {
-  OpList *list_root = 0, *list = 0;
-  bigNum num;
-  int prev_type = NONE;
-  char *pStr = (char *)constpStr;
+int getType(int ch) {
+  int i = 0;
+  if(!_types[1]) {
+    memset(_types,0,256);
+    for(i='0';i<='9';i++)
+      _types[i] = NUM;
 
-  list = list_root = initList();
+    _types['('] = FUNC;
+    _types[')'] = FUNC;
+    _types['+'] = FUNC;
+    _types['-'] = FUNC;
+    _types['*'] = FUNC;
+    _types['/'] = FUNC;
+    _types['^'] = FUNC;
+    for(i='a';i<='z';i++)
+      _types[i] = VAR;
+    for(i='A';i<='Z';i++)
+      _types[i] = VAR;
+    _types[1] = 1;
+  }
 
-  while (*pStr) {
-    switch (prev_type) {
-    case NUM:
-      list->operand.type = NUM;
-      list->operand.data.num = num;
+  return _types[ch];
+}
 
-      list->next = initList();
-      list = list->next;
-      break;
+#define NEWLIST(__list) \
+  (__list)->next = calloc(1,sizeof(OpList));\
+  (__list) = (__list)->next;
+
+OpList *getOpListByStr(char *s, int *error) {
+  char *ch = NULL;
+  *error = 0;
+  int pType = NONE, nType = NONE;
+  int varNameLen = 0;
+  OpList *list = NULL, *root = NULL;
+  Operand *op = NULL;
+  BigNum *ten = intToBigNum(10,error), *dig = intToBigNum(5,error);
+
+  if (!s) {
+    *error = E_STRING_DOES_NOT_EXIST;
+    return NULL;
+  }
+
+  ch = s;
+
+  root = calloc(1,sizeof(OpList));
+  list = root;
+
+  while (*ch) {
+    pType = nType;
+    nType = getType(*ch);
+    op = &(list->operand);
+
+    if ((pType != NUM) && (nType == NUM)) {
+      op->data.num = newBigNum(error);
+      op->type = NUM;
     }
 
-    switch (*pStr) {
-    case '0':
-    case '1':
-    case '2':
-    case '3':
-    case '4':
-    case '5':
-    case '6':
-    case '7':
-    case '8':
-    case '9':
-      if (NUM == prev_type) {
-        num = num * 10 + (*pStr-'0');
+    if ((pType != VAR) && (nType == VAR)) {
+      op->data.varName = calloc(sizeof(char),256);
+      varNameLen = 0;
+      op->type = VAR;
+    }
+
+    if (pType == NUM) {
+      if (nType == NUM) {
+        mul(op->data.num,ten,0,error);
+        dig->digits[0] = *ch++ - '0'; // грязный хак
+        add(op->data.num,dig,0,error);
       } else {
-        prev_type = NUM;
-        num = (*pStr-'0');
+        NEWLIST(list);
       }
-      break;
+    } elif (pType == VAR) {
+      if (nType == VAR) {
+        op->data.varName[varNameLen++] = *ch++;
+        if (255 == varNameLen) {
+          *error = E_VAR_NAME_TOO_LONG;
+          return root;
+        }
+      } else {
+        NEWLIST(list);
+      }
+    } elif (nType == FUNC) {
+      op->data.func = getOperate(*ch++);
+      op->type = FUNC;
+      NEWLIST(list);
     }
   }
-}
 
-int checkPrefixOpList(OpList *prefix);
-OpList *prefixToPostfix(OpList *prefix);
-int64_t postfixCalculate(OpList *postfix);
+  deleteBigNum(ten);
+  deleteBigNum(dig);
 
-void test() {
-  ;
+  return root;
 }
-*/

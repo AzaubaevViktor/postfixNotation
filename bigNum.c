@@ -153,6 +153,34 @@ int compare_abs(BigNum *a, BigNum *b) {
   return 0;
 }
 
+BigNum *intToBigNum(int64_t in, int *error) {
+  size_t len = 0, i = 0, sig = 1;
+  BigNum *num = NULL;
+  *error = 0;
+
+  num = newBigNum(error);
+  ERROR;
+
+  if (in < 0) {
+    sig = -1;
+    in = -in;
+  }
+
+  num->sig = sig;
+
+  for (i = 1; in >= i; (i *= 10, len++));
+
+  setBigNumLen(num,len ? len : 1,error);
+  ERROR;
+
+  for ((i /= 10, len--); 0 < i; (i /= 10, len--)) {
+    num->digits[len] = in / i;
+    in %= i;
+  }
+
+  return num;
+}
+
 BigNum *stringToBigNum(char *s, int *error) {
   char *_s = s; /* hack for '-' */
   char *ch = NULL;
@@ -494,6 +522,8 @@ void BigNum_tests() {
   char resultHtml[2][100] = {"<font style='color:red'>FAIL</font>","<font style='color:green'>OK</font>"};
   char *sin,*sout = 0;
   char testsModChar[][4] = { {125,24,5,5}, {10,3,1,3}, {-10,3,2,-4}, {-100,66,32,-2}, {-100,-13,-9,7}, {-127,-127,-127,-127} };
+  int64_t testInt[] = {0,-123,712637,124124438895,-321499875,-0,-1,777};
+  char testIntAns[][30] = {"0","-123","712637","124124438895","-321499875","0","-1"};
   char testInterconversion[][2][1000] = {
     {"84371321499123965911030412040148392","84371321499123965911030412040148392"},
     {"000000084371321499123965911030412040148392","84371321499123965911030412040148392"},
@@ -632,6 +662,22 @@ void BigNum_tests() {
         fflush(f);
       }
     }
+
+    fprintf(f,"<h2>#%d. Interconversion int->BigNum tests</h2>\n",count1++);
+    {
+      for (i = 0; 777 != testInt[i]; i++){
+        fprintf(f,"<b>#%d.1.%d</b>:&nbsp;",count1,i+1);
+        a = intToBigNum(testInt[i],&error);
+        sout = BigNumToString(a,&error);
+        result = (!strcmp(testIntAns[i],sout));
+        fprintf(f,"%s<br>\n",resultHtml[result]);
+        if (!result) fprintf(f,"Num:%lli Out:%s Right:%s\n",testInt[i],sout,testIntAns[i]);
+        deleteBigNum(a);
+        free(sout);
+        fflush(f);
+      }
+    }
+
 
     fprintf(f,"<h2>#%d. Base Math tests</h2>",count1++);
     {
